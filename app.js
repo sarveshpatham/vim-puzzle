@@ -239,6 +239,12 @@ const commandDefinitions = {
   "?": "search backward for pattern",
   n: "repeat search in same direction",
   N: "repeat search in opposite direction",
+  i: "insert before the cursor",
+  I: "insert at the beginning of the line",
+  a: "insert (append) after the cursor",
+  A: "insert (append) at the end of the line",
+  o: "append (open) a new line below the current line",
+  O: "append (open) a new line above the current line",
   m: "set current position for mark A",
   "`": "jump to position of mark A",
   "'": "jump to the first non-blank character on the line of mark x",
@@ -247,10 +253,12 @@ const commandDefinitions = {
   P: "put (paste) before cursor",
   r: "replace a single character",
   x: "delete (cut) character",
+  u: "undo",
   qa: "record macro a",
   q: "stop recording macro",
   "@a": "run macro a",
   "@@": "rerun last run macro",
+  Esc: "exit insert mode or clear pending command",
 };
 
 const proposedModes = [
@@ -308,6 +316,7 @@ let currentLevelIndex = 0;
 let currentLevel = null;
 let activeLines = [];
 let cursor = { line: 0, col: 0 };
+let editorMode = "normal";
 let strokes = 0;
 let command = emptyCommand();
 let completed = false;
@@ -323,6 +332,7 @@ let activeTooltipNode = null;
 let levelStartTime = 0;
 let elapsedMs = 0;
 let timerId = 0;
+let undoStack = [];
 
 renderHome();
 hydrateMotionTooltips();
@@ -526,7 +536,7 @@ function positionMotionTooltip(keyNode) {
 }
 
 function showHome() {
-  stopTimer();
+  resetTimer();
   dom.homeView.hidden = false;
   dom.gameView.hidden = true;
   hideCompleteModal();
@@ -546,6 +556,7 @@ function startLevel(index) {
   currentLevel = levels[index];
   activeLines = currentLevel.lines.slice();
   cursor = { ...currentLevel.start };
+  editorMode = "normal";
   strokes = 0;
   completed = false;
   command = emptyCommand();
@@ -557,6 +568,7 @@ function startLevel(index) {
   macroRecording = "";
   lastMacroRegister = "";
   replayingMacro = false;
+  undoStack = [];
   dom.homeView.hidden = true;
   dom.gameView.hidden = false;
   dom.levelTitle.textContent = currentLevel.title;
@@ -565,7 +577,7 @@ function startLevel(index) {
   dom.statusLine.textContent = "Ready";
   dom.lastCommand.textContent = "--";
   dom.goalLabel.textContent = formatGoal(currentLevel);
-  startTimer();
+  resetTimer();
   updateCommandBuffer();
   updateScoreStrip();
   renderBoard();
@@ -593,8 +605,9 @@ function renderBoard() {
     const code = document.createElement("code");
     code.className = "line-code";
 
-    const chars = line.length ? [...line] : [" "];
-    chars.forEach((char, colIndex) => {
+    const chars = [...line];
+    const renderedChars = chars.length ? chars : [" "];
+    renderedChars.forEach((char, colIndex) => {
       const charNode = document.createElement("span");
       charNode.className = "board-char";
       charNode.textContent = char === " " ? String.fromCharCode(160) : char;
@@ -614,6 +627,13 @@ function renderBoard() {
       code.append(charNode);
     });
 
+    if (editorMode === "insert" && line.length > 0 && cursor.line === lineIndex && cursor.col === line.length) {
+      const cursorNode = document.createElement("span");
+      cursorNode.className = "board-char is-cursor is-insert-end";
+      cursorNode.textContent = String.fromCharCode(160);
+      code.append(cursorNode);
+    }
+
     row.append(lineNumber, code);
     fragment.append(row);
   });
@@ -630,6 +650,7 @@ function handleKeydown(event) {
   if (!isPlayableKey(key)) return;
 
   event.preventDefault();
+  ensureTimerStarted();
   strokes += 1;
   const recordMacroKey = shouldRecordMacroKey(key);
   processKey(key);
@@ -666,6 +687,11 @@ function hasPendingCommand() {
 }
 
 function processKey(rawKey) {
+  if (editorMode === "insert") {
+    processInsertKey(rawKey);
+    return;
+  }
+
   if (command.searchMode) {
     processSearchInput(rawKey);
     return;
@@ -846,6 +872,26 @@ function processKey(rawKey) {
       finishCommand(key);
       return;
     }
+  } else if (key === "i") {
+    enterInsertMode("before");
+    return;
+  } else if (key === "a") {
+    enterInsertMode("after");
+    return;
+  } else if (key === "I") {
+    enterInsertMode("line-start");
+    return;
+  } else if (key === "A") {
+    enterInsertMode("line-end");
+    return;
+  } else if (key === "o") {
+    openInsertLine(true);
+    return;
+  } else if (key === "O") {
+    openInsertLine(false);
+    return;
+  } else if (key === "u") {
+    undoLastChange();
   } else if (key === "p") {
     pasteLines(true);
   } else if (key === "P") {
@@ -863,7 +909,7 @@ function processKey(rawKey) {
     return;
   }
 
-  if (key !== "p" && key !== "P" && key !== "x") {
+  if (key !== "p" && key !== "P" && key !== "x" && key !== "u") {
     dom.statusLine.textContent = "Moved";
   }
   dom.lastCommand.textContent = `${command.count}${key}`;
@@ -977,6 +1023,143 @@ function processZCommand(key) {
   dom.lastCommand.textContent = `${command.count}z${key}`;
 }
 
+function enterInsertMode(position) {
+  saveUndoState();
+  const line = currentLine();
+
+  if (position === "after") {
+    cursor.col = Math.min(line.length, cursor.col + 1);
+  } else if (position === "line-start") {
+    cursor.col = 0;
+  } else if (position === "line-end") {
+    cursor.col = line.length;
+  } else {
+    cursor.col = clamp(cursor.col, 0, line.length);
+  }
+
+  editorMode = "insert";
+  dom.statusLine.textContent = "Insert";
+  dom.lastCommand.textContent = positionToInsertCommand(position);
+  command = emptyCommand();
+}
+
+function openInsertLine(below) {
+  saveUndoState();
+  const insertAt = below ? cursor.line + 1 : cursor.line;
+  activeLines.splice(insertAt, 0, "");
+  cursor.line = insertAt;
+  cursor.col = 0;
+  editorMode = "insert";
+  dom.statusLine.textContent = "Insert";
+  dom.lastCommand.textContent = below ? "o" : "O";
+  command = emptyCommand();
+}
+
+function positionToInsertCommand(position) {
+  if (position === "after") return "a";
+  if (position === "line-start") return "I";
+  if (position === "line-end") return "A";
+  return "i";
+}
+
+function processInsertKey(key) {
+  if (key === "Escape") {
+    exitInsertMode();
+    return;
+  }
+
+  if (key === "Backspace") {
+    backspaceInsert();
+    dom.lastCommand.textContent = "Backspace";
+    return;
+  }
+
+  if (key === "Enter") {
+    splitInsertLine();
+    dom.lastCommand.textContent = "Enter";
+    return;
+  }
+
+  if (key.length !== 1) return;
+
+  const line = currentLine();
+  activeLines[cursor.line] = `${line.slice(0, cursor.col)}${key}${line.slice(cursor.col)}`;
+  cursor.col += 1;
+  dom.statusLine.textContent = "Insert";
+  dom.lastCommand.textContent = key;
+}
+
+function exitInsertMode() {
+  editorMode = "normal";
+  const line = currentLine();
+  cursor.col = line.length === 0 ? 0 : clamp(cursor.col - 1, 0, line.length - 1);
+  dom.statusLine.textContent = "Normal";
+  dom.lastCommand.textContent = "Esc";
+  command = emptyCommand();
+}
+
+function backspaceInsert() {
+  if (cursor.col > 0) {
+    const line = currentLine();
+    activeLines[cursor.line] = `${line.slice(0, cursor.col - 1)}${line.slice(cursor.col)}`;
+    cursor.col -= 1;
+    dom.statusLine.textContent = "Insert";
+    return;
+  }
+
+  if (cursor.line === 0) {
+    dom.statusLine.textContent = "Insert";
+    return;
+  }
+
+  const current = currentLine();
+  const previous = activeLines[cursor.line - 1];
+  cursor.col = previous.length;
+  activeLines[cursor.line - 1] = `${previous}${current}`;
+  activeLines.splice(cursor.line, 1);
+  cursor.line -= 1;
+  dom.statusLine.textContent = "Insert";
+}
+
+function splitInsertLine() {
+  const line = currentLine();
+  const before = line.slice(0, cursor.col);
+  const after = line.slice(cursor.col);
+  activeLines[cursor.line] = before;
+  activeLines.splice(cursor.line + 1, 0, after);
+  cursor.line += 1;
+  cursor.col = 0;
+  dom.statusLine.textContent = "Insert";
+}
+
+function saveUndoState() {
+  undoStack.push({
+    lines: activeLines.slice(),
+    cursor: { ...cursor },
+  });
+
+  if (undoStack.length > 100) {
+    undoStack.shift();
+  }
+}
+
+function undoLastChange() {
+  const snapshot = undoStack.pop();
+
+  if (!snapshot) {
+    dom.statusLine.textContent = "Nothing to undo";
+    dom.lastCommand.textContent = "u";
+    return;
+  }
+
+  activeLines = snapshot.lines.slice();
+  cursor = { ...snapshot.cursor };
+  editorMode = "normal";
+  command = emptyCommand();
+  dom.statusLine.textContent = "Undone";
+  dom.lastCommand.textContent = "u";
+}
+
 function processDCommand(key) {
   if (key === "d") {
     deleteLines(getCount(1));
@@ -1047,6 +1230,7 @@ function runMacro(register) {
 function deleteLines(count) {
   if (activeLines.length === 0) return;
 
+  saveUndoState();
   const deleteCount = clamp(count, 1, activeLines.length - cursor.line);
   lineRegister = activeLines.splice(cursor.line, deleteCount);
 
@@ -1065,6 +1249,7 @@ function pasteLines(afterCursor) {
     return;
   }
 
+  saveUndoState();
   const insertAt = afterCursor ? cursor.line + 1 : cursor.line;
   activeLines.splice(insertAt, 0, ...lineRegister);
   cursor.line = insertAt;
@@ -1085,6 +1270,7 @@ function replaceCharacter(char) {
     return;
   }
 
+  saveUndoState();
   activeLines[cursor.line] = `${line.slice(0, cursor.col)}${char}${line.slice(cursor.col + 1)}`;
   dom.statusLine.textContent = "Replaced";
 }
@@ -1097,6 +1283,7 @@ function deleteCharacter(count) {
     return;
   }
 
+  saveUndoState();
   const deleteCount = clamp(count, 1, line.length - cursor.col);
   activeLines[cursor.line] = `${line.slice(0, cursor.col)}${line.slice(cursor.col + deleteCount)}`;
   cursor.col = clamp(cursor.col, 0, Math.max(0, currentLine().length - 1));
@@ -1479,6 +1666,18 @@ function startTimer() {
   timerId = window.setInterval(updateScoreStrip, 100);
 }
 
+function resetTimer() {
+  stopTimer();
+  levelStartTime = 0;
+  elapsedMs = 0;
+}
+
+function ensureTimerStarted() {
+  if (!levelStartTime) {
+    startTimer();
+  }
+}
+
 function stopTimer() {
   if (timerId) {
     window.clearInterval(timerId);
@@ -1523,7 +1722,7 @@ function linesEqual(left, right) {
 }
 
 function updateScoreStrip() {
-  if (currentLevel && !completed) {
+  if (currentLevel && !completed && levelStartTime) {
     elapsedMs = Date.now() - levelStartTime;
   }
 
@@ -1535,7 +1734,10 @@ function updateScoreStrip() {
 }
 
 function updateCommandBuffer() {
-  if (command.searchMode) {
+  if (editorMode === "insert") {
+    dom.commandBuffer.textContent = "-- INSERT --";
+    dom.commandDefinition.textContent = "type text into the buffer; Esc returns to normal mode";
+  } else if (command.searchMode) {
     dom.commandBuffer.textContent = `${command.count}${command.searchMode}${command.searchInput}`;
     dom.commandDefinition.textContent = describeCommand(`${command.count}${command.searchMode}${command.searchInput || "pattern"}`);
   } else if (command.replaceMode) {
@@ -1563,7 +1765,8 @@ function updateCommandBuffer() {
 
 function describeCommand(commandText) {
   if (!commandText || commandText === "--") return "Press a supported motion.";
-  if (commandText === "Esc" || commandText === "Backspace") return "clear the pending command";
+  if (commandText === "Esc") return commandDefinitions.Esc;
+  if (commandText === "Backspace") return "delete before cursor in insert mode, or clear the pending command";
 
   const countMatch = commandText.match(/^(\d+)(.+)$/);
   const count = countMatch ? countMatch[1] : "";

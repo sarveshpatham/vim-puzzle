@@ -20,14 +20,16 @@ Open `index.html` in a browser, or serve the folder with `python -m http.server`
 - 10 find-target levels built around `f`, `F`, `t`, `T`, and counts
 - Reorder Buffer mode with `dd`, `p`, and `P`
 - Macro Run mode with `qa`, `q`, `@a`, `@@`, `r`, and `x`
-- Supported motions and commands: `h`, `j`, `k`, `l`, `w`, `W`, `b`, `B`, `e`, `E`, `ge`, `gE`, `0`, `^`, `$`, `%`, `gg`, `G`, `H`, `M`, `L`, `{`, `}`, `f`, `F`, `t`, `T`, `;`, `,`, `/`, `?`, `n`, `N`, `m`, backtick mark jump, apostrophe mark jump, `g_`, `gj`, `gk`, `zz`, `zt`, `zb`, `dd`, `p`, `P`, `r`, `x`, `qa`, `q`, `@a`, and `@@`
+- Insert mode with `i`, `a`, `I`, `A`, `o`, `O`, typed characters, `Backspace`, `Enter`, and `Esc`
+- Undo support with `u`
+- Supported motions and commands: `h`, `j`, `k`, `l`, `w`, `W`, `b`, `B`, `e`, `E`, `ge`, `gE`, `0`, `^`, `$`, `%`, `gg`, `G`, `H`, `M`, `L`, `{`, `}`, `f`, `F`, `t`, `T`, `;`, `,`, `/`, `?`, `n`, `N`, `i`, `a`, `I`, `A`, `o`, `O`, `Esc`, `m`, backtick mark jump, apostrophe mark jump, `g_`, `gj`, `gk`, `zz`, `zt`, `zb`, `dd`, `p`, `P`, `r`, `x`, `u`, `qa`, `q`, `@a`, and `@@`
 - Numeric counts before supported motions, including `3j`, `4w`, `2fa`, `3G`, `3gg`, and `2/pattern`
 
 ## Scoring
 
 Scores are out of 100, and the saved high score is the highest score for each level.
 
-The score formula is `100 - (keystrokes * time multiplier)`, clamped from 0 to 100. The timer starts when a level starts and stops when the level is solved.
+The score formula is `100 - (keystrokes * time multiplier)`, clamped from 0 to 100. The timer starts on the first accepted key press and stops when the level is solved.
 
 - Less than 1 second: `0x` key penalty
 - 1 to 3 seconds: `1x` key penalty
@@ -52,6 +54,7 @@ Implemented as direct matches:
 - Paragraph and pair movement: `{`, `}`, `%`
 - Marks: `ma`, backtick jump to mark, and apostrophe jump to mark
 - Search movement: `/pattern`, `?pattern`, `n`, `N`
+- Insert mode: `i`, `I`, `a`, `A`, `o`, `O`, typed characters, `Backspace`, `Enter`, `Esc`
 - Line and edit commands for puzzle modes: `dd`, `p`, `P`, `r`, `x`, `qa`, `q`, `@a`, `@@`
 
 Implemented with app-specific limits:
@@ -64,7 +67,7 @@ Implemented with app-specific limits:
 
 Not part of this movement puzzle yet:
 
-- Insert mode: `i`, `I`, `a`, `A`, `o`, `O`, `ea`, and insert-mode Ctrl commands
+- Advanced insert mode commands: `ea` and insert-mode Ctrl commands
 - Editing, cut, paste, visual, indent, macro, register, global, file, quickfix, and exiting commands outside the subset used by the Reorder Buffer and Macro Run modes
 - Screen-scroll, declaration, and editor integrations such as `Ctrl+e`, `Ctrl+y`, `Ctrl+b`, `Ctrl+f`, `Ctrl+d`, `Ctrl+u`, `gd`, `gD`, `:vim`, `:cnext`, and jump/change-list navigation
 
