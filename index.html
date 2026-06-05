@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>vim-puzzle</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <button class="icon-button" id="home-button" type="button" aria-label="Home" title="Home">
+          <span aria-hidden="true">V</span>
+        </button>
+        <div class="brand-block">
+          <h1>vim-puzzle</h1>
+          <p id="screen-subtitle">Motion puzzles for terse edits.</p>
+        </div>
+        <div class="score-strip" aria-label="Current score">
+          <div>
+            <span>Time</span>
+            <strong id="timer-count">0.0s</strong>
+          </div>
+          <div>
+            <span>Strokes</span>
+            <strong id="stroke-count">0</strong>
+          </div>
+          <div>
+            <span>Score</span>
+            <strong id="score-count">--</strong>
+          </div>
+          <div>
+            <span>Best</span>
+            <strong id="best-score">--</strong>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="home-view" id="home-view" aria-labelledby="levels-heading">
+          <div class="section-heading">
+            <h2 id="levels-heading">Levels</h2>
+            <button class="ghost-button" id="clear-scores-button" type="button">Clear Scores</button>
+          </div>
+          <div class="level-grid" id="level-grid"></div>
+
+          <div class="section-heading proposal-heading">
+            <h2>Proposed Modes</h2>
+          </div>
+          <div class="proposal-grid" id="proposal-grid"></div>
+        </section>
+
+        <section class="game-view" id="game-view" hidden>
+          <div class="game-toolbar">
+            <button class="ghost-button" id="back-button" type="button">Levels</button>
+            <div class="level-title-block">
+              <h2 id="level-title"></h2>
+              <p id="level-brief"></p>
+            </div>
+            <div class="toolbar-actions">
+              <button class="ghost-button" id="restart-button" type="button">Restart</button>
+            </div>
+          </div>
+
+          <div class="play-layout">
+            <section class="board-panel" aria-label="Puzzle text">
+              <div class="target-row">
+                <div>
+                  <span>Goal</span>
+                  <strong id="goal-label"></strong>
+                </div>
+                <div>
+                  <span>Last</span>
+                  <strong id="last-command">--</strong>
+                </div>
+              </div>
+              <div class="text-board" id="text-board" tabindex="0" aria-label="Vim puzzle board"></div>
+            </section>
+
+            <aside class="side-panel" aria-label="Game status">
+              <div class="status-card">
+                <span>Status</span>
+                <strong id="status-line">Ready</strong>
+              </div>
+              <div class="status-card">
+                <span>Command</span>
+                <strong id="command-buffer">--</strong>
+                <p id="command-definition">Press a supported motion.</p>
+              </div>
+              <div class="motion-list" aria-label="Available motions">
+                <span>Motion Set</span>
+                <div>
+                  <kbd>h</kbd>
+                  <kbd>j</kbd>
+                  <kbd>k</kbd>
+                  <kbd>l</kbd>
+                  <kbd>w</kbd>
+                  <kbd>W</kbd>
+                  <kbd>b</kbd>
+                  <kbd>B</kbd>
+                  <kbd>e</kbd>
+                  <kbd>E</kbd>
+                  <kbd>ge</kbd>
+                  <kbd>gE</kbd>
+                  <kbd>0</kbd>
+                  <kbd>^</kbd>
+                  <kbd>$</kbd>
+                  <kbd>%</kbd>
+                  <kbd>gg</kbd>
+                  <kbd>G</kbd>
+                  <kbd>H</kbd>
+                  <kbd>M</kbd>
+                  <kbd>L</kbd>
+                  <kbd>{</kbd>
+                  <kbd>}</kbd>
+                  <kbd>f</kbd>
+                  <kbd>F</kbd>
+                  <kbd>t</kbd>
+                  <kbd>T</kbd>
+                  <kbd>;</kbd>
+                  <kbd>,</kbd>
+                  <kbd>/</kbd>
+                  <kbd>?</kbd>
+                  <kbd>n</kbd>
+                  <kbd>N</kbd>
+                  <kbd>m</kbd>
+                  <kbd>`</kbd>
+                  <kbd>'</kbd>
+                  <kbd>dd</kbd>
+                  <kbd>p</kbd>
+                  <kbd>P</kbd>
+                  <kbd>r</kbd>
+                  <kbd>x</kbd>
+                  <kbd>qa</kbd>
+                  <kbd>q</kbd>
+                  <kbd>@a</kbd>
+                  <kbd>@@</kbd>
+                  <kbd>g_</kbd>
+                  <kbd>gj</kbd>
+                  <kbd>gk</kbd>
+                  <kbd>zz</kbd>
+                  <kbd>zt</kbd>
+                  <kbd>zb</kbd>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="complete-modal" hidden>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="complete-heading">
+        <h2 id="complete-heading">Level Complete</h2>
+        <p id="complete-copy"></p>
+        <div class="modal-actions">
+          <button class="primary-button" id="next-level-button" type="button">Next Level</button>
+          <button class="ghost-button" id="modal-restart-button" type="button">Retry</button>
+          <button class="ghost-button" id="modal-home-button" type="button">Levels</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="motion-tooltip" id="motion-tooltip" role="tooltip" hidden></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
